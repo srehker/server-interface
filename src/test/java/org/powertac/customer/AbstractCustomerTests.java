@@ -41,6 +41,7 @@ import org.powertac.common.interfaces.CustomerServiceAccessor;
 import org.powertac.common.interfaces.ServerConfiguration;
 import org.powertac.common.interfaces.TariffMarket;
 import org.powertac.common.msg.TariffRevoke;
+import org.powertac.common.repo.ContractRepo;
 import org.powertac.common.repo.CustomerRepo;
 import org.powertac.common.repo.RandomSeedRepo;
 import org.powertac.common.repo.TariffRepo;
@@ -573,6 +574,12 @@ public class AbstractCustomerTests
     {
       return null;
     }
+
+	@Override
+	public ContractRepo getContractRepo() {
+		// TODO Auto-generated method stub
+		return null;
+	}
     
   }
 

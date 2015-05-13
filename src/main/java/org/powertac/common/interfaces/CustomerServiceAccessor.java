@@ -15,6 +15,7 @@
  */
 package org.powertac.common.interfaces;
 
+import org.powertac.common.repo.ContractRepo;
 import org.powertac.common.repo.CustomerRepo;
 import org.powertac.common.repo.RandomSeedRepo;
 import org.powertac.common.repo.TariffRepo;
@@ -55,6 +56,11 @@ public interface CustomerServiceAccessor
    * Returns a reference to a TariffSubscriptionRepo
    */
   public TariffSubscriptionRepo getTariffSubscriptionRepo ();
+  
+  /**
+   * Returns a reference to a ContractRepo
+   */
+  public ContractRepo getContractRepo();
 
   /**
    * Returns a reference to a TimeslotRepo
