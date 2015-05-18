@@ -38,6 +38,7 @@ import org.powertac.common.repo.CustomerRepo;
 import org.powertac.common.repo.RandomSeedRepo;
 import org.powertac.common.repo.TariffRepo;
 import org.powertac.common.repo.TariffSubscriptionRepo;
+import org.powertac.common.repo.TimeSeriesRepo;
 import org.powertac.common.repo.TimeslotRepo;
 import org.powertac.common.repo.WeatherReportRepo;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -91,6 +92,9 @@ public class CustomerModelService extends TimeslotPhaseProcessor implements
 	private ArrayList<AbstractCustomer> models;
 	@Autowired
 	private ContractRepo contractRepo;
+	
+	@Autowired
+	private TimeSeriesRepo timeSeriesRepo;
 
 	@Override
 	public void setDefaults() {
@@ -215,5 +219,10 @@ public class CustomerModelService extends TimeslotPhaseProcessor implements
 	@Override
 	public ContractRepo getContractRepo() {
 		return contractRepo;
+	}
+
+	@Override
+	public TimeSeriesRepo getTimeSeriesRepo() {
+		return timeSeriesRepo;
 	}
 }

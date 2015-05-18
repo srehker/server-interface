@@ -46,6 +46,7 @@ import org.powertac.common.repo.CustomerRepo;
 import org.powertac.common.repo.RandomSeedRepo;
 import org.powertac.common.repo.TariffRepo;
 import org.powertac.common.repo.TariffSubscriptionRepo;
+import org.powertac.common.repo.TimeSeriesRepo;
 import org.powertac.common.repo.TimeslotRepo;
 import org.powertac.common.repo.WeatherReportRepo;
 import org.powertac.customer.AbstractCustomer;
@@ -577,6 +578,12 @@ public class AbstractCustomerTests
 
 	@Override
 	public ContractRepo getContractRepo() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public TimeSeriesRepo getTimeSeriesRepo() {
 		// TODO Auto-generated method stub
 		return null;
 	}

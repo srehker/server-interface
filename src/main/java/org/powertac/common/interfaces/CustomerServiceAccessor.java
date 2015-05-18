@@ -20,6 +20,7 @@ import org.powertac.common.repo.CustomerRepo;
 import org.powertac.common.repo.RandomSeedRepo;
 import org.powertac.common.repo.TariffRepo;
 import org.powertac.common.repo.TariffSubscriptionRepo;
+import org.powertac.common.repo.TimeSeriesRepo;
 import org.powertac.common.repo.TimeslotRepo;
 import org.powertac.common.repo.WeatherReportRepo;
 
@@ -62,6 +63,11 @@ public interface CustomerServiceAccessor
    */
   public ContractRepo getContractRepo();
 
+  /**
+   * Returns a reference to a ContractRepo
+   */
+  public TimeSeriesRepo getTimeSeriesRepo();
+  
   /**
    * Returns a reference to a TimeslotRepo
    */

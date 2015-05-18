@@ -12,6 +12,7 @@ import org.powertac.common.Contract;
 import org.powertac.common.CustomerInfo;
 import org.powertac.common.IdGenerator;
 import org.powertac.common.RandomSeed;
+import org.powertac.common.Contract.State;
 import org.powertac.common.enumerations.PowerType;
 import org.powertac.common.interfaces.BrokerProxy;
 import org.powertac.common.interfaces.CustomerServiceAccessor;
@@ -20,6 +21,7 @@ import org.powertac.common.msg.ContractAnnounce;
 import org.powertac.common.msg.ContractConfirm;
 import org.powertac.common.msg.ContractDecommit;
 import org.powertac.common.msg.ContractEnd;
+import org.powertac.common.msg.ContractNegotiationMessage;
 import org.powertac.common.msg.ContractOffer;
 import org.powertac.common.timeseries.LoadForecast;
 import org.powertac.common.timeseries.LoadTimeSeries;
@@ -76,12 +78,49 @@ public abstract class AbstractContractCustomer {
 			brokerProxyService.registerBrokerMessageListener(this, messageType);
 		}
 	}
+	
+	public void handleMessage(ContractNegotiationMessage message) {
+		// TODO auf antworten von customers reagieren
+	}
 
-	public double computeUtility(Contract offer) {
-		double utility = 0;
+	// counter offer
+	public void handleMessage(ContractOffer message) {		
+		double utility = computeUtility(message);
+		log.info("Offer arrived at Customer."+message+" Utility ="+utility);
+		ContractAccept ca=new ContractAccept(message.getBroker(), message);
+		brokerProxyService.routeMessage(ca);
+	}
 
+	// CONFIRM
+	public void handleMessage(ContractConfirm message) {
+		// TODO exception: should not be here
+	}
+
+	// END
+	public void handleMessage(ContractEnd message) {
+		log.info("Contract END arrived at Customer.");
+		
+	}
+
+	public void handleMessage(ContractAccept message) {
+		log.info("Contract ACCEPT arrived at Customer. Sending Confirm.");			
+		
+	}
+
+	// DECOMMIT
+	public void handleMessage(ContractDecommit message) {
+		log.info("Contract DECOMMIT arrived at Customer.");
+		
+
+	}
+
+
+	public double computeUtility(ContractOffer offer) {
+		double utility = 0;	
+
+		DateTime starttime = service.getTimeslotRepo().currentTimeslot().getStartTime();
 		LoadTimeSeries loadForecastTS = forecast.calculateLoadForecast(
-				historicLoad, offer.getStartDate(), offer.getEndDate());
+				historicLoad, starttime, starttime.plus(offer.getDuration()));
 		utility += loadForecastTS.getTotalLoad() * offer.getEnergyPrice(); // total
 																			// expected
 																			// energy
@@ -92,8 +131,9 @@ public abstract class AbstractContractCustomer {
 					* offer.getPeakLoadPrice(); // total expected peak load fee
 		}
 
-		if (activeContract(offer.getStartDate())) {
-			utility += offer.getEarlyExitFee();
+
+		if (activeContract(starttime)) {
+			utility += offer.getEarlyWithdrawPayment();
 		}
 
 		// TODO utility for negotiation rounds, early agreement is better/worse
