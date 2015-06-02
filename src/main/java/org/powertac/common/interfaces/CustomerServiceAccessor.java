@@ -77,4 +77,6 @@ public interface CustomerServiceAccessor
    * Returns a reference to a WeatherReportRepo
    */
   public WeatherReportRepo getWeatherReportRepo ();
+  
+  public BrokerProxy getBrokerProxyService();
 }

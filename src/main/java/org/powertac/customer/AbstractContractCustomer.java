@@ -23,10 +23,13 @@ import org.powertac.common.msg.ContractDecommit;
 import org.powertac.common.msg.ContractEnd;
 import org.powertac.common.msg.ContractNegotiationMessage;
 import org.powertac.common.msg.ContractOffer;
+import org.powertac.common.timeseries.DayComparisonLoadForecast;
 import org.powertac.common.timeseries.LoadForecast;
 import org.powertac.common.timeseries.LoadTimeSeries;
 import org.powertac.common.timeseries.TimeSeriesGenerator;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
 
 public abstract class AbstractContractCustomer {
 	static protected Logger log = Logger
@@ -39,9 +42,8 @@ public abstract class AbstractContractCustomer {
 
 	// Service accessor
 	protected CustomerServiceAccessor service;
-
-	@Autowired
-	protected BrokerProxy brokerProxyService;
+	
+	
 
 	/** The id of the Abstract Customer */
 	protected long custId;
@@ -54,31 +56,31 @@ public abstract class AbstractContractCustomer {
 	protected LoadForecast forecast;
 
 	/**
-	 * Default constructor, requires explicit setting of name
+	 * constructor, requires explicit setting of name
 	 */
+	public AbstractContractCustomer(DateTime now) {
+		super();
+		custId = IdGenerator.createId();
+		customerInfos = new HashMap<PowerType, List<CustomerInfo>>();
+		allCustomerInfos = new ArrayList<CustomerInfo>();
+		generator =new TimeSeriesGenerator();
+		forecast = new DayComparisonLoadForecast();
+		activeContracts = new ArrayList<Contract>();
+		this.historicLoad = generator.generateLoadTimeSeries(now.minusYears(1),
+				now, (int) (custId % 3));		
+	}
+
+	
 	public AbstractContractCustomer() {
 		super();
 		custId = IdGenerator.createId();
 		customerInfos = new HashMap<PowerType, List<CustomerInfo>>();
 		allCustomerInfos = new ArrayList<CustomerInfo>();
+		generator =new TimeSeriesGenerator();
+		forecast = new DayComparisonLoadForecast();
+		activeContracts = new ArrayList<Contract>();
 	}
 
-	/**
-	 * Abstract Customer constructor with explicit name.
-	 */
-	public AbstractContractCustomer(String name, DateTime now) {
-		this();
-		this.name = name;
-		this.historicLoad = generator.generateLoadTimeSeries(now.minusYears(1),
-				now, (int) (custId % 3));
-		for (Class<?> messageType : Arrays.asList(ContractOffer.class,
-				ContractAccept.class, ContractAnnounce.class,
-				ContractConfirm.class, ContractDecommit.class,
-				ContractEnd.class)) {
-			brokerProxyService.registerBrokerMessageListener(this, messageType);
-		}
-	}
-	
 	public void handleMessage(ContractNegotiationMessage message) {
 		// TODO auf antworten von customers reagieren
 	}
@@ -88,7 +90,7 @@ public abstract class AbstractContractCustomer {
 		double utility = computeUtility(message);
 		log.info("Offer arrived at Customer."+message+" Utility ="+utility);
 		ContractAccept ca=new ContractAccept(message.getBroker(), message);
-		brokerProxyService.routeMessage(ca);
+		service.getBrokerProxyService().sendMessage(message.getBroker(), ca);
 	}
 
 	// CONFIRM
@@ -166,6 +168,15 @@ public abstract class AbstractContractCustomer {
 	public void initialize() {
 		rs1 = service.getRandomSeedRepo().getRandomSeed(name, 0,
 				"ContractCustomer");
+		DateTime now=service.getTimeslotRepo().currentTimeslot().getStartInstant().toDateTime();
+		this.historicLoad = generator.generateLoadTimeSeries(now.minusYears(1),
+				now, (int) (custId % 3));
+		for (Class<?> messageType : Arrays.asList(ContractOffer.class,
+				ContractAccept.class, ContractAnnounce.class,
+				ContractConfirm.class, ContractDecommit.class,
+				ContractEnd.class)) {
+			service.getBrokerProxyService().registerBrokerMessageListener(this, messageType);
+		}
 	}
 
 	/**

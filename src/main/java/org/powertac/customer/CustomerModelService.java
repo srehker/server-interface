@@ -27,6 +27,7 @@ import org.powertac.common.CustomerInfo;
 import org.powertac.common.Tariff;
 import org.powertac.common.TimeService;
 import org.powertac.common.interfaces.BootstrapState;
+import org.powertac.common.interfaces.BrokerProxy;
 import org.powertac.common.interfaces.CustomerServiceAccessor;
 import org.powertac.common.interfaces.InitializationService;
 import org.powertac.common.interfaces.NewTariffListener;
@@ -224,5 +225,11 @@ public class CustomerModelService extends TimeslotPhaseProcessor implements
 	@Override
 	public TimeSeriesRepo getTimeSeriesRepo() {
 		return timeSeriesRepo;
+	}
+
+	@Override
+	public BrokerProxy getBrokerProxyService() {
+		// TODO Auto-generated method stub
+		return null;
 	}
 }

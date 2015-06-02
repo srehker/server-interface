@@ -37,6 +37,7 @@ import org.powertac.common.TariffSpecification;
 import org.powertac.common.TariffSubscription;
 import org.powertac.common.TimeService;
 import org.powertac.common.enumerations.PowerType;
+import org.powertac.common.interfaces.BrokerProxy;
 import org.powertac.common.interfaces.CustomerServiceAccessor;
 import org.powertac.common.interfaces.ServerConfiguration;
 import org.powertac.common.interfaces.TariffMarket;
@@ -584,6 +585,12 @@ public class AbstractCustomerTests
 
 	@Override
 	public TimeSeriesRepo getTimeSeriesRepo() {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	@Override
+	public BrokerProxy getBrokerProxyService() {
 		// TODO Auto-generated method stub
 		return null;
 	}
