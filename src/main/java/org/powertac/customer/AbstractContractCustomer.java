@@ -12,9 +12,7 @@ import org.powertac.common.Contract;
 import org.powertac.common.CustomerInfo;
 import org.powertac.common.IdGenerator;
 import org.powertac.common.RandomSeed;
-import org.powertac.common.Contract.State;
 import org.powertac.common.enumerations.PowerType;
-import org.powertac.common.interfaces.BrokerProxy;
 import org.powertac.common.interfaces.CustomerServiceAccessor;
 import org.powertac.common.msg.ContractAccept;
 import org.powertac.common.msg.ContractAnnounce;
@@ -27,9 +25,6 @@ import org.powertac.common.timeseries.DayComparisonLoadForecast;
 import org.powertac.common.timeseries.LoadForecast;
 import org.powertac.common.timeseries.LoadTimeSeries;
 import org.powertac.common.timeseries.TimeSeriesGenerator;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-
 
 public abstract class AbstractContractCustomer {
 	static protected Logger log = Logger
@@ -38,12 +33,10 @@ public abstract class AbstractContractCustomer {
 	protected String name = "dummy";
 	protected HashMap<PowerType, List<CustomerInfo>> customerInfos;
 	protected List<CustomerInfo> allCustomerInfos;
-	protected List<Contract> activeContracts;
+	protected HashMap<Long, Contract> activeContracts;
 
 	// Service accessor
 	protected CustomerServiceAccessor service;
-	
-	
 
 	/** The id of the Abstract Customer */
 	protected long custId;
@@ -55,6 +48,17 @@ public abstract class AbstractContractCustomer {
 	protected TimeSeriesGenerator generator;
 	protected LoadForecast forecast;
 
+	/** max number of rounds for negotiation */
+	protected static final int DEADLINE = 10;
+	protected static final double discountingFactor = 0.1;
+	protected HashMap<Long, Integer> negotiationRounds = new HashMap<Long, Integer>();
+
+	protected double reservationEnergyPrice = 0.004;
+	protected double reservationPeakLoadPrice = 70;
+	protected double reservationEarlyExitPrice = 5000;
+	protected long durationPreference = 1000 * 60 * 60 * 24 * 30;
+	protected long maxDurationDeviation = 1000 * 60 * 60 * 24 * 7;
+
 	/**
 	 * constructor, requires explicit setting of name
 	 */
@@ -63,22 +67,21 @@ public abstract class AbstractContractCustomer {
 		custId = IdGenerator.createId();
 		customerInfos = new HashMap<PowerType, List<CustomerInfo>>();
 		allCustomerInfos = new ArrayList<CustomerInfo>();
-		generator =new TimeSeriesGenerator();
+		generator = new TimeSeriesGenerator();
 		forecast = new DayComparisonLoadForecast();
-		activeContracts = new ArrayList<Contract>();
+		activeContracts = new HashMap<Long, Contract>();
 		this.historicLoad = generator.generateLoadTimeSeries(now.minusYears(1),
-				now, (int) (custId % 3));		
+				now, (int) (custId % 3));
 	}
 
-	
 	public AbstractContractCustomer() {
 		super();
 		custId = IdGenerator.createId();
 		customerInfos = new HashMap<PowerType, List<CustomerInfo>>();
 		allCustomerInfos = new ArrayList<CustomerInfo>();
-		generator =new TimeSeriesGenerator();
+		generator = new TimeSeriesGenerator();
 		forecast = new DayComparisonLoadForecast();
-		activeContracts = new ArrayList<Contract>();
+		activeContracts = new HashMap<Long, Contract>();
 	}
 
 	public void handleMessage(ContractNegotiationMessage message) {
@@ -86,67 +89,231 @@ public abstract class AbstractContractCustomer {
 	}
 
 	// counter offer
-	public void handleMessage(ContractOffer message) {		
-		double utility = computeUtility(message);
-		log.info("Offer arrived at Customer."+message+" Utility ="+utility);
-		ContractAccept ca=new ContractAccept(message.getBroker(), message);
-		service.getBrokerProxyService().sendMessage(message.getBroker(), ca);
+	public void handleMessage(ContractOffer message) {
+		updateNegotiationRound(message.getBroker().getId());
+		double utility = computeUtility(message, message.getDuration());
+		log.info("Offer arrived at Customer." + message + " Utility ="
+				+ utility + " Round ="
+				+ negotiationRounds.get(message.getBroker().getId()));
+
+		if (negotiationRounds.get(message.getBroker().getId()) > DEADLINE) {
+			ContractEnd ce = new ContractEnd(message.getBroker(), message);
+			service.getBrokerProxyService().sendMessage(
+					message.getBroker(), ce);
+		} else {
+
+			// buyer role
+			if (message.getPowerType() == PowerType.CONSUMPTION) {
+				ContractOffer co = generateCounterOffer(message);
+
+				double counterOfferUtility = computeUtility(co,
+						co.getDuration());
+
+				// cant find a better option --> ACCEPT
+				if (utility > counterOfferUtility) {
+					ContractAccept ca = new ContractAccept(message);
+					service.getBrokerProxyService().sendMessage(
+							message.getBroker(), ca);
+				} else {
+					// can find a better option --> COUNTEROFFER
+					service.getBrokerProxyService().sendMessage(
+							message.getBroker(), co);
+				}
+			}
+			// seller role
+			else if (message.getPowerType() == PowerType.PRODUCTION) {
+				ContractOffer co = generateCounterOffer(message);
+
+			}
+
+		}
+
+	}
+
+	private ContractOffer generateCounterOffer(ContractOffer message) {
+		return new ContractOffer(message.getBroker(), this.custId,
+				reservationEnergyPrice, reservationPeakLoadPrice,
+				durationPreference, reservationEarlyExitPrice,
+				message.getPowerType());
+
+	}
+
+	private void updateNegotiationRound(long id) {
+		if (negotiationRounds.containsKey(id)
+				&& negotiationRounds.get(id) <= DEADLINE) {
+			negotiationRounds.put(id, negotiationRounds.get(id) + 1);
+		} else {
+			negotiationRounds.put(id, 1);
+		}
+
 	}
 
 	// CONFIRM
 	public void handleMessage(ContractConfirm message) {
-		// TODO exception: should not be here
+		activeContracts.put(message.getContractId(), service.getContractRepo()
+				.findContractById(message.getContractId()));
+		negotiationRounds.put(message.getBroker().getId(), 0);
 	}
 
 	// END
 	public void handleMessage(ContractEnd message) {
 		log.info("Contract END arrived at Customer.");
-		
+		negotiationRounds.put(message.getBroker().getId(), 0);
+
 	}
 
 	public void handleMessage(ContractAccept message) {
-		log.info("Contract ACCEPT arrived at Customer. Sending Confirm.");			
-		
+		log.info("Contract ACCEPT arrived at Customer. Sending Confirm.");
+		ContractConfirm cf = new ContractConfirm(message.getBroker(), message);
+		service.getBrokerProxyService().sendMessage(message.getBroker(), cf);
+		negotiationRounds.put(message.getBroker().getId(), 0);
 	}
 
-	// DECOMMIT
+	/** DECOMMIT is only allowed if this is a producer customer */
 	public void handleMessage(ContractDecommit message) {
 		log.info("Contract DECOMMIT arrived at Customer.");
-		
 
+		if (this.getCustomerInfo(PowerType.PRODUCTION) != null) {
+			activeContracts.remove(message.getContractId());
+			ContractConfirm cf = new ContractConfirm(message.getBroker(),
+					message);
+			service.getBrokerProxyService()
+					.sendMessage(message.getBroker(), cf);
+			negotiationRounds.put(message.getBroker().getId(), 0);
+		} else {
+			log.error("Trying to DECOMMIT from a consumer customer. This is not possible");
+		}
 	}
 
+	public double computeUtility(ContractOffer offer, long duration) {
+		if (offer.getPowerType() == PowerType.CONSUMPTION) {
+			return computeEnergyPriceUtilityBuyer(offer, duration)
+					+ computePeakLoadPriceUtilityBuyer(offer, duration)
+					+ computeEarlyWithdrawUtility(offer);
+		} else if (offer.getPowerType() == PowerType.PRODUCTION) {
+			return computeEnergyPriceUtilitySeller(offer, duration)
+					+ computePeakLoadPriceUtilitySeller(offer, duration)
+					+ computeEarlyWithdrawUtility(offer);
+		}
 
-	public double computeUtility(ContractOffer offer) {
-		double utility = 0;	
+		return -1;
+	}
 
-		DateTime starttime = service.getTimeslotRepo().currentTimeslot().getStartTime();
+	public double computeEnergyPriceUtilityBuyer(ContractOffer offer,
+			long duration) {
+		double utility = 0;
+
+		DateTime starttime = service.getTimeslotRepo().currentTimeslot()
+				.getStartTime();
 		LoadTimeSeries loadForecastTS = forecast.calculateLoadForecast(
-				historicLoad, starttime, starttime.plus(offer.getDuration()));
-		utility += loadForecastTS.getTotalLoad() * offer.getEnergyPrice(); // total
-																			// expected
-																			// energy
-																			// cost
+				historicLoad, starttime, starttime.plus(duration));
+		utility += loadForecastTS.getTotalLoad()
+				* (reservationEnergyPrice - offer.getEnergyPrice()); // total
+		// expected
+		// energy
+		// cost
+		// TIME DISCOUNTING
+		utility = utility
+				* Math.pow(discountingFactor,
+						negotiationRounds.get(offer.getBroker().getId()));
+
+		return utility;
+	}
+
+	public double computeEnergyPriceUtilitySeller(ContractOffer offer,
+			long duration) {
+		double utility = 0;
+
+		DateTime starttime = service.getTimeslotRepo().currentTimeslot()
+				.getStartTime();
+		LoadTimeSeries loadForecastTS = forecast.calculateLoadForecast(
+				historicLoad, starttime, starttime.plus(duration));
+		utility += loadForecastTS.getTotalLoad()
+				* (offer.getEnergyPrice() - reservationEnergyPrice); // total
+		// expected
+		// energy
+		// cost
+		// TIME DISCOUNTING
+		utility = utility
+				* Math.pow(discountingFactor,
+						negotiationRounds.get(offer.getBroker().getId()));
+
+		return utility;
+	}
+
+	public double computePeakLoadPriceUtilityBuyer(ContractOffer offer,
+			long duration) {
+		double utility = 0;
+		DateTime starttime = service.getTimeslotRepo().currentTimeslot()
+				.getStartTime();
+		LoadTimeSeries loadForecastTS = forecast.calculateLoadForecast(
+				historicLoad, starttime, starttime.plus(duration));
 
 		for (int month = 1; month <= 12; month++) {
 			utility += loadForecastTS.getMaxLoad(month)
-					* offer.getPeakLoadPrice(); // total expected peak load fee
+					* (reservationPeakLoadPrice - offer.getPeakLoadPrice()); // total
+																				// expected
+																				// peak
+																				// load
+																				// fee
 		}
+		// TIME DISCOUNTING
+		utility = utility
+				* Math.pow(discountingFactor,
+						negotiationRounds.get(offer.getBroker().getId()));
 
+		return utility;
+	}
+
+	public double computePeakLoadPriceUtilitySeller(ContractOffer offer,
+			long duration) {
+		double utility = 0;
+		DateTime starttime = service.getTimeslotRepo().currentTimeslot()
+				.getStartTime();
+		LoadTimeSeries loadForecastTS = forecast.calculateLoadForecast(
+				historicLoad, starttime, starttime.plus(duration));
+
+		for (int month = 1; month <= 12; month++) {
+			utility += loadForecastTS.getMaxLoad(month)
+					* (offer.getPeakLoadPrice() - reservationPeakLoadPrice); // total
+																				// expected
+																				// peak
+																				// load
+																				// fee
+																				// -
+																				// fee
+																				// with
+																				// reservation
+																				// price
+		}
+		// TIME DISCOUNTING
+		utility = utility
+				* Math.pow(discountingFactor,
+						negotiationRounds.get(offer.getBroker().getId()));
+
+		return utility;
+	}
+
+	public double computeEarlyWithdrawUtility(ContractOffer offer) {
+		double utility = 0;
+		DateTime starttime = service.getTimeslotRepo().currentTimeslot()
+				.getStartTime();
 
 		if (activeContract(starttime)) {
 			utility += offer.getEarlyWithdrawPayment();
 		}
 
-		// TODO utility for negotiation rounds, early agreement is better/worse
-
+		// TIME DISCOUNTING
+		utility = utility
+				* Math.pow(discountingFactor,
+						negotiationRounds.get(offer.getBroker().getId()));
 		return utility;
 	}
 
 	private boolean activeContract(DateTime startDate) {
-		for (Contract c : activeContracts) {
+		for (Contract c : activeContracts.values()) {
 			Interval interval = new Interval(c.getStartDate(), c.getEndDate());
-			if( interval.contains(new DateTime(startDate))){
+			if (interval.contains(new DateTime(startDate))) {
 				return true;
 			}
 		}
@@ -163,19 +330,21 @@ public abstract class AbstractContractCustomer {
 
 	/**
 	 * Initializes the instance. Called after configuration, and after a call to
-	 * setServices(). TODO -- do we really want this here?
+	 * setServices(). 
 	 */
 	public void initialize() {
 		rs1 = service.getRandomSeedRepo().getRandomSeed(name, 0,
 				"ContractCustomer");
-		DateTime now=service.getTimeslotRepo().currentTimeslot().getStartInstant().toDateTime();
+		DateTime now = service.getTimeslotRepo().currentTimeslot()
+				.getStartInstant().toDateTime();
 		this.historicLoad = generator.generateLoadTimeSeries(now.minusYears(1),
 				now, (int) (custId % 3));
 		for (Class<?> messageType : Arrays.asList(ContractOffer.class,
 				ContractAccept.class, ContractAnnounce.class,
 				ContractConfirm.class, ContractDecommit.class,
 				ContractEnd.class)) {
-			service.getBrokerProxyService().registerBrokerMessageListener(this, messageType);
+			service.getBrokerProxyService().registerBrokerMessageListener(this,
+					messageType);
 		}
 	}
 
