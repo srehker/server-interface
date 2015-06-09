@@ -68,7 +68,6 @@ public abstract class AbstractContractCustomer {
 	 * constructor, requires explicit setting of name
 	 */
 	public AbstractContractCustomer(DateTime now) {
-		super();
 		custId = IdGenerator.createId();
 		customerInfos = new HashMap<PowerType, List<CustomerInfo>>();
 		allCustomerInfos = new ArrayList<CustomerInfo>();
@@ -80,8 +79,7 @@ public abstract class AbstractContractCustomer {
 	}
 
 	public AbstractContractCustomer() {
-		super();
-		custId = IdGenerator.createId();
+		// custId = IdGenerator.createId();
 		customerInfos = new HashMap<PowerType, List<CustomerInfo>>();
 		allCustomerInfos = new ArrayList<CustomerInfo>();
 		generator = new TimeSeriesGenerator();
@@ -137,8 +135,8 @@ public abstract class AbstractContractCustomer {
 						message.getDuration());
 				counterOfferUtility = computePeakLoadPriceUtilityBuyer(co,
 						co.getDuration());
-				log.info("Peak Load Eval: " + message + "CounterOffer: "
-						+ co + " Round =" + getRound(message) + " Utility="
+				log.info("Peak Load Eval: " + message + "CounterOffer: " + co
+						+ " Round =" + getRound(message) + " Utility="
 						+ utility + "CO-Utility=" + counterOfferUtility);
 				// cant find a better option --> ACCEPT
 				if (utility >= counterOfferUtility) {
@@ -155,8 +153,8 @@ public abstract class AbstractContractCustomer {
 				co.setDuration(coDuration);
 				utility = computeUtility(message, message.getDuration());
 				counterOfferUtility = computeUtility(co, co.getDuration());
-				log.info("DUration Eval: " + message + "CounterOffer: "
-						+ co + " Round =" + getRound(message) + " Utility="
+				log.info("DUration Eval: " + message + "CounterOffer: " + co
+						+ " Round =" + getRound(message) + " Utility="
 						+ utility + "CO-Utility=" + counterOfferUtility);
 				// cant find a better option --> ACCEPT
 				if (utility >= counterOfferUtility) {
@@ -248,8 +246,8 @@ public abstract class AbstractContractCustomer {
 						message.getDuration());
 				counterOfferUtility = computePeakLoadPriceUtilitySeller(co,
 						co.getDuration());
-				log.info("Peak Load Eval: " + message + "CounterOffer: "
-						+ co + " Round =" + getRound(message) + " Utility="
+				log.info("Peak Load Eval: " + message + "CounterOffer: " + co
+						+ " Round =" + getRound(message) + " Utility="
 						+ utility + "CO-Utility=" + counterOfferUtility);
 				// cant find a better option --> ACCEPT
 				if (utility >= counterOfferUtility) {
@@ -266,8 +264,8 @@ public abstract class AbstractContractCustomer {
 				co.setDuration(coDuration);
 				utility = computeUtility(message, message.getDuration());
 				counterOfferUtility = computeUtility(co, co.getDuration());
-				log.info("Duration Eval: " + message + "CounterOffer: "
-						+ co + " Round =" + getRound(message) + " Utility="
+				log.info("Duration Eval: " + message + "CounterOffer: " + co
+						+ " Round =" + getRound(message) + " Utility="
 						+ utility + "CO-Utility=" + counterOfferUtility);
 				// cant find a better option --> ACCEPT
 				if (utility >= counterOfferUtility) {
@@ -334,8 +332,9 @@ public abstract class AbstractContractCustomer {
 		return negotiationRounds.get(message.getBroker().getId());
 	}
 
+	@Deprecated
 	private ContractOffer generateCounterOffer(ContractOffer message) {
-		return new ContractOffer(message.getBroker(), this.custId,
+		return new ContractOffer(message.getBroker(), this.custId,// not custid
 				reservationEnergyPrice, reservationPeakLoadPrice,
 				durationPreference, reservationEarlyExitPrice,
 				message.getPowerType());
@@ -356,7 +355,7 @@ public abstract class AbstractContractCustomer {
 	}
 
 	protected double negotiationDecisionFunction(int k, int round, int deadline) {
-		return k + (1 - k) * Math.pow(round / deadline, 1 / counterOfferFactor);
+		return k + (1 - k) * Math.pow((round+0.) / deadline, 1 / counterOfferFactor);
 	}
 
 	private void updateNegotiationRound(long id) {
@@ -521,7 +520,7 @@ public abstract class AbstractContractCustomer {
 		return utility;
 	}
 
-	private boolean activeContract(DateTime startDate) {
+	protected boolean activeContract(DateTime startDate) {
 		for (Contract c : activeContracts.values()) {
 			Interval interval = new Interval(c.getStartDate(), c.getEndDate());
 			if (interval.contains(new DateTime(startDate))) {
@@ -556,6 +555,14 @@ public abstract class AbstractContractCustomer {
 				ContractEnd.class)) {
 			service.getBrokerProxyService().registerBrokerMessageListener(this,
 					messageType);
+		}
+		if (!activeContract(service.getTimeslotRepo().currentTimeslot()
+				.getStartTime())) {
+			for (CustomerInfo ci : service.getCustomerRepo().findByName(
+					getName())) {
+				ContractAnnounce cann = new ContractAnnounce(ci.getId());// has to be CustomerInfo ID
+				service.getBrokerProxyService().broadcastMessage(cann);
+			}
 		}
 	}
 
