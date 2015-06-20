@@ -12,6 +12,7 @@ import org.powertac.common.Contract;
 import org.powertac.common.CustomerInfo;
 import org.powertac.common.IdGenerator;
 import org.powertac.common.RandomSeed;
+import org.powertac.common.Contract.State;
 import org.powertac.common.enumerations.PowerType;
 import org.powertac.common.exceptions.PowerTacException;
 import org.powertac.common.interfaces.CustomerServiceAccessor;
@@ -58,8 +59,8 @@ public abstract class AbstractContractCustomer {
 	protected static final double counterOfferFactor = 1;
 	protected HashMap<Long, Integer> negotiationRounds = new HashMap<Long, Integer>();
 
-	protected double reservationEnergyPrice = 0.004;
-	protected double reservationPeakLoadPrice = 70;
+	protected double reservationEnergyPrice = 0.002;
+	protected double reservationPeakLoadPrice = 65;
 	protected double reservationEarlyExitPrice = 5000;
 	protected long durationPreference = 1000 * 60 * 60 * 24 * 30;
 	protected long maxDurationDeviation = 1000 * 60 * 60 * 24 * 7;
@@ -89,6 +90,20 @@ public abstract class AbstractContractCustomer {
 
 	// counter offer
 	public void handleMessage(ContractOffer message) {
+		if (isValidMessage(message))
+			processOffer(message, true);
+
+	}
+
+	private boolean isValidMessage(ContractNegotiationMessage message) {
+		for (CustomerInfo ci : service.getCustomerRepo().findByName(getName())) {
+			if (ci.getId() == message.getCustomerId())
+				return true;
+		}
+		return false;
+	}
+
+	private void processOffer(ContractOffer message, boolean canAccept) {
 		updateNegotiationRound(message.getBroker().getId());
 
 		log.info("Offer arrived at Customer." + message + " Round ="
@@ -99,90 +114,104 @@ public abstract class AbstractContractCustomer {
 			service.getBrokerProxyService()
 					.sendMessage(message.getBroker(), ce);
 		} else {
-
+			double utility = 0.;
+			double counterOfferUtility = 0.;
+			double coPeakLoadPrice = 0.;
+			double coEnergyPrice = 0.;
+			long coDuration = 0;
+			double coEarlyWithdrawPrice = 0;
 			// buyer role
 			if (message.getPowerType() == PowerType.CONSUMPTION) {
 
 				// Energy Price
 				ContractOffer co = new ContractOffer(message);
-				double coEnergyPrice = generateOfferPriceBuyer(
-						message.getEnergyPrice(), reservationEnergyPrice,
-						getRound(message));
-				co.setEnergyPrice(coEnergyPrice);
-				double utility = computeEnergyPriceUtilityBuyer(message,
-						message.getDuration());
-				double counterOfferUtility = computeEnergyPriceUtilityBuyer(co,
-						co.getDuration());
-				log.info("Energy Price Eval: " + message + "CounterOffer: "
-						+ co + " Round =" + getRound(message) + " Utility="
-						+ utility + "CO-Utility=" + counterOfferUtility);
-				// cant find a better option --> ACCEPT
-				if (utility >= counterOfferUtility) {
-					ContractAccept ca = new ContractAccept(message);
-					ca.setAcceptedEnergyPrice(true);
-					service.getBrokerProxyService().sendMessage(
-							message.getBroker(), ca);
-					return;
+				if (!message.isAcceptedEnergyPrice()) {
+					coEnergyPrice = generateOfferPriceBuyer(
+							message.getEnergyPrice(), reservationEnergyPrice,
+							getRound(message));
+					co.setEnergyPrice(coEnergyPrice);
+					utility = computeEnergyPriceUtilityBuyer(message,
+							message.getDuration());
+					counterOfferUtility = computeEnergyPriceUtilityBuyer(co,
+							co.getDuration());
+					log.info("Energy Price Eval: " + message + "CounterOffer: "
+							+ co + " Round =" + getRound(message) + " Utility="
+							+ utility + "CO-Utility=" + counterOfferUtility);
+					// cant find a better option --> ACCEPT
+					if (canAccept && utility >= counterOfferUtility) {
+						ContractAccept ca = new ContractAccept(message);
+						ca.setAcceptedEnergyPrice(true);
+						service.getBrokerProxyService().sendMessage(
+								message.getBroker(), ca);
+						return;
+					}
 				}
 
 				// Peak Load Price
-				co = new ContractOffer(message);
-				double coPeakLoadPrice = generateOfferPriceBuyer(
-						message.getPeakLoadPrice(), reservationPeakLoadPrice,
-						getRound(message));
-				co.setPeakLoadPrice(coPeakLoadPrice);
-				utility = computePeakLoadPriceUtilityBuyer(message,
-						message.getDuration());
-				counterOfferUtility = computePeakLoadPriceUtilityBuyer(co,
-						co.getDuration());
-				log.info("Peak Load Eval: " + message + "CounterOffer: " + co
-						+ " Round =" + getRound(message) + " Utility="
-						+ utility + "CO-Utility=" + counterOfferUtility);
-				// cant find a better option --> ACCEPT
-				if (utility >= counterOfferUtility) {
-					ContractAccept ca = new ContractAccept(message);
-					ca.setAcceptedPeakLoadPrice(true);
-					service.getBrokerProxyService().sendMessage(
-							message.getBroker(), ca);
-					return;
+				if (!message.isAcceptedPeakLoadPrice()) {
+					co = new ContractOffer(message);
+					coPeakLoadPrice = generateOfferPriceBuyer(
+							message.getPeakLoadPrice(),
+							reservationPeakLoadPrice, getRound(message));
+					co.setPeakLoadPrice(coPeakLoadPrice);
+					utility = computePeakLoadPriceUtilityBuyer(message,
+							message.getDuration());
+					counterOfferUtility = computePeakLoadPriceUtilityBuyer(co,
+							co.getDuration());
+					log.info("Peak Load Eval: " + message + "CounterOffer: "
+							+ co + " Round =" + getRound(message) + " Utility="
+							+ utility + "CO-Utility=" + counterOfferUtility);
+					// cant find a better option --> ACCEPT
+					if (canAccept && utility >= counterOfferUtility) {
+						ContractAccept ca = new ContractAccept(message);
+						ca.setAcceptedPeakLoadPrice(true);
+						service.getBrokerProxyService().sendMessage(
+								message.getBroker(), ca);
+						return;
+					}
 				}
 
 				// Duration
-				co = new ContractOffer(message);
-				long coDuration = durationPreference; // TODO generation
-				co.setDuration(coDuration);
-				utility = computeUtility(message, message.getDuration());
-				counterOfferUtility = computeUtility(co, co.getDuration());
-				log.info("DUration Eval: " + message + "CounterOffer: " + co
-						+ " Round =" + getRound(message) + " Utility="
-						+ utility + "CO-Utility=" + counterOfferUtility);
-				// cant find a better option --> ACCEPT
-				if (utility >= counterOfferUtility) {
-					ContractAccept ca = new ContractAccept(message);
-					ca.setAcceptedDuration(true);
-					service.getBrokerProxyService().sendMessage(
-							message.getBroker(), ca);
-					return;
+				if (!message.isAcceptedDuration()) {
+					co = new ContractOffer(message);
+					coDuration = durationPreference; // TODO generation
+					co.setDuration(coDuration);
+					utility = computeUtility(message, message.getDuration());
+					counterOfferUtility = computeUtility(co, co.getDuration());
+					log.info("DUration Eval: " + message + "CounterOffer: "
+							+ co + " Round =" + getRound(message) + " Utility="
+							+ utility + "CO-Utility=" + counterOfferUtility);
+					// cant find a better option --> ACCEPT
+					if (canAccept && utility >= counterOfferUtility) {
+						ContractAccept ca = new ContractAccept(message);
+						ca.setAcceptedDuration(true);
+						service.getBrokerProxyService().sendMessage(
+								message.getBroker(), ca);
+						return;
+					}
 				}
 
 				// Early Withdraw
-				co = new ContractOffer(message);
-				double coEarlyWithdrawPrice = generateOfferPriceBuyer(
-						message.getPeakLoadPrice(), reservationPeakLoadPrice,
-						getRound(message));
-				co.setEarlyWithdrawPayment(coEarlyWithdrawPrice);
-				utility = computeEarlyWithdrawUtility(message);
-				counterOfferUtility = computeEarlyWithdrawUtility(co);
-				log.info("Early Withdraw Eval: " + message + "CounterOffer: "
-						+ co + " Round =" + getRound(message) + " Utility="
-						+ utility + "CO-Utility=" + counterOfferUtility);
-				// cant find a better option --> ACCEPT
-				if (utility >= counterOfferUtility) {
-					ContractAccept ca = new ContractAccept(message);
-					ca.setAcceptedEarlyWithdrawPayment(true);
-					service.getBrokerProxyService().sendMessage(
-							message.getBroker(), ca);
-					return;
+				if (!message.isAcceptedEarlyWithdrawPayment()) {
+					co = new ContractOffer(message);
+					coEarlyWithdrawPrice = generateOfferPriceBuyer(
+							message.getEarlyWithdrawPayment(),
+							reservationEarlyExitPrice, getRound(message));
+					co.setEarlyWithdrawPayment(coEarlyWithdrawPrice);
+					utility = computeEarlyWithdrawUtility(message);
+					counterOfferUtility = computeEarlyWithdrawUtility(co);
+					log.info("Early Withdraw Eval: " + message
+							+ "CounterOffer: " + co + " Round ="
+							+ getRound(message) + " Utility=" + utility
+							+ "CO-Utility=" + counterOfferUtility);
+					// cant find a better option --> ACCEPT
+					if (canAccept && utility >= counterOfferUtility) {
+						ContractAccept ca = new ContractAccept(message);
+						ca.setAcceptedEarlyWithdrawPayment(true);
+						service.getBrokerProxyService().sendMessage(
+								message.getBroker(), ca);
+						return;
+					}
 				}
 
 				// NOTHING WAS ACCEPTED THIS ROUND -> COUNTER OFFER
@@ -216,84 +245,93 @@ public abstract class AbstractContractCustomer {
 			else if (message.getPowerType() == PowerType.PRODUCTION) {
 				// Energy Price
 				ContractOffer co = new ContractOffer(message);
-				double coEnergyPrice = generateOfferPriceSeller(
-						message.getEnergyPrice(), reservationEnergyPrice,
-						getRound(message));
-				co.setEnergyPrice(coEnergyPrice);
-				double utility = computeEnergyPriceUtilitySeller(message,
-						message.getDuration());
-				double counterOfferUtility = computeEnergyPriceUtilitySeller(
-						co, co.getDuration());
-				log.info("Energy Price Eval: " + message + "CounterOffer: "
-						+ co + " Round =" + getRound(message) + " Utility="
-						+ utility + "CO-Utility=" + counterOfferUtility);
-				// cant find a better option --> ACCEPT
-				if (utility >= counterOfferUtility) {
-					ContractAccept ca = new ContractAccept(message);
-					ca.setAcceptedEnergyPrice(true);
-					service.getBrokerProxyService().sendMessage(
-							message.getBroker(), ca);
-					return;
+				if (!message.isAcceptedEnergyPrice()) {
+					coEnergyPrice = generateOfferPriceSeller(
+							message.getEnergyPrice(), reservationEnergyPrice,
+							getRound(message));
+					co.setEnergyPrice(coEnergyPrice);
+					utility = computeEnergyPriceUtilitySeller(message,
+							message.getDuration());
+					counterOfferUtility = computeEnergyPriceUtilitySeller(co,
+							co.getDuration());
+					log.info("Energy Price Eval: " + message + "CounterOffer: "
+							+ co + " Round =" + getRound(message) + " Utility="
+							+ utility + "CO-Utility=" + counterOfferUtility);
+					// cant find a better option --> ACCEPT
+					if (canAccept && utility >= counterOfferUtility) {
+						ContractAccept ca = new ContractAccept(message);
+						ca.setAcceptedEnergyPrice(true);
+						service.getBrokerProxyService().sendMessage(
+								message.getBroker(), ca);
+						return;
+					}
 				}
 
 				// Peak Load Price
-				co = new ContractOffer(message);
-				double coPeakLoadPrice = generateOfferPriceSeller(
-						message.getPeakLoadPrice(), reservationPeakLoadPrice,
-						getRound(message));
-				co.setPeakLoadPrice(coPeakLoadPrice);
-				utility = computePeakLoadPriceUtilitySeller(message,
-						message.getDuration());
-				counterOfferUtility = computePeakLoadPriceUtilitySeller(co,
-						co.getDuration());
-				log.info("Peak Load Eval: " + message + "CounterOffer: " + co
-						+ " Round =" + getRound(message) + " Utility="
-						+ utility + "CO-Utility=" + counterOfferUtility);
-				// cant find a better option --> ACCEPT
-				if (utility >= counterOfferUtility) {
-					ContractAccept ca = new ContractAccept(message);
-					ca.setAcceptedPeakLoadPrice(true);
-					service.getBrokerProxyService().sendMessage(
-							message.getBroker(), ca);
-					return;
+				if (!message.isAcceptedPeakLoadPrice()) {
+					co = new ContractOffer(message);
+					coPeakLoadPrice = generateOfferPriceSeller(
+							message.getPeakLoadPrice(),
+							reservationPeakLoadPrice, getRound(message));
+					co.setPeakLoadPrice(coPeakLoadPrice);
+					utility = computePeakLoadPriceUtilitySeller(message,
+							message.getDuration());
+					counterOfferUtility = computePeakLoadPriceUtilitySeller(co,
+							co.getDuration());
+					log.info("Peak Load Eval: " + message + "CounterOffer: "
+							+ co + " Round =" + getRound(message) + " Utility="
+							+ utility + "CO-Utility=" + counterOfferUtility);
+					// cant find a better option --> ACCEPT
+					if (canAccept && utility >= counterOfferUtility) {
+						ContractAccept ca = new ContractAccept(message);
+						ca.setAcceptedPeakLoadPrice(true);
+						service.getBrokerProxyService().sendMessage(
+								message.getBroker(), ca);
+						return;
+					}
 				}
 
 				// Duration
-				co = new ContractOffer(message);
-				long coDuration = durationPreference; // TODO generation
-				co.setDuration(coDuration);
-				utility = computeUtility(message, message.getDuration());
-				counterOfferUtility = computeUtility(co, co.getDuration());
-				log.info("Duration Eval: " + message + "CounterOffer: " + co
-						+ " Round =" + getRound(message) + " Utility="
-						+ utility + "CO-Utility=" + counterOfferUtility);
-				// cant find a better option --> ACCEPT
-				if (utility >= counterOfferUtility) {
-					ContractAccept ca = new ContractAccept(message);
-					ca.setAcceptedDuration(true);
-					service.getBrokerProxyService().sendMessage(
-							message.getBroker(), ca);
-					return;
+				if (!message.isAcceptedDuration()) {
+					co = new ContractOffer(message);
+					coDuration = durationPreference; // TODO generation
+					co.setDuration(coDuration);
+					utility = computeUtility(message, message.getDuration());
+					counterOfferUtility = computeUtility(co, co.getDuration());
+					log.info("Duration Eval: " + message + "CounterOffer: "
+							+ co + " Round =" + getRound(message) + " Utility="
+							+ utility + "CO-Utility=" + counterOfferUtility);
+					// cant find a better option --> ACCEPT
+					if (canAccept && utility >= counterOfferUtility) {
+						ContractAccept ca = new ContractAccept(message);
+						ca.setAcceptedDuration(true);
+						service.getBrokerProxyService().sendMessage(
+								message.getBroker(), ca);
+						return;
+					}
 				}
 
 				// Early Withdraw
-				co = new ContractOffer(message);
-				double coEarlyWithdrawPrice = generateOfferPriceSeller(
-						message.getPeakLoadPrice(), reservationPeakLoadPrice,
-						getRound(message));
-				co.setEarlyWithdrawPayment(coEarlyWithdrawPrice);
-				utility = computeEarlyWithdrawUtility(message);
-				counterOfferUtility = computeEarlyWithdrawUtility(co);
-				log.info("Early Withdraw Eval: " + message + "CounterOffer: "
-						+ co + " Round =" + getRound(message) + " Utility="
-						+ utility + "CO-Utility=" + counterOfferUtility);
-				// cant find a better option --> ACCEPT
-				if (utility >= counterOfferUtility) {
-					ContractAccept ca = new ContractAccept(message);
-					ca.setAcceptedEarlyWithdrawPayment(true);
-					service.getBrokerProxyService().sendMessage(
-							message.getBroker(), ca);
-					return;
+				if (!message.isAcceptedEarlyWithdrawPayment()) {
+					co = new ContractOffer(message);
+					coEarlyWithdrawPrice = generateOfferPriceSeller(
+							message.getEarlyWithdrawPayment(),
+							reservationEarlyExitPrice, getRound(message));
+					co.setEarlyWithdrawPayment(coEarlyWithdrawPrice);
+					utility = computeEarlyWithdrawUtility(message);
+					counterOfferUtility = computeEarlyWithdrawUtility(co);
+					log.info("Early Withdraw Eval: " + message
+							+ "CounterOffer: " + co + " Round ="
+							+ getRound(message) + " Utility=" + utility
+							+ "CO-Utility=" + counterOfferUtility);
+					// cant find a better option --> ACCEPT
+					if (canAccept && utility >= counterOfferUtility) {
+						ContractAccept ca = new ContractAccept(message);
+						ca.setAcceptedEarlyWithdrawPayment(true);
+						service.getBrokerProxyService().sendMessage(
+								message.getBroker(), ca);
+						return;
+					}
 				}
 
 				// NOTHING WAS ACCEPTED THIS ROUND -> COUNTER OFFER
@@ -325,7 +363,6 @@ public abstract class AbstractContractCustomer {
 			}
 
 		}
-
 	}
 
 	private Integer getRound(ContractOffer message) {
@@ -334,7 +371,8 @@ public abstract class AbstractContractCustomer {
 
 	@Deprecated
 	private ContractOffer generateCounterOffer(ContractOffer message) {
-		return new ContractOffer(message.getBroker(), this.custId,// not custid
+		return new ContractOffer(message.getBroker(),
+				this.custId,// not custid
 				reservationEnergyPrice, reservationPeakLoadPrice,
 				durationPreference, reservationEarlyExitPrice,
 				message.getPowerType());
@@ -355,7 +393,8 @@ public abstract class AbstractContractCustomer {
 	}
 
 	protected double negotiationDecisionFunction(int k, int round, int deadline) {
-		return k + (1 - k) * Math.pow((round+0.) / deadline, 1 / counterOfferFactor);
+		return k + (1 - k)
+				* Math.pow((round + 0.) / deadline, 1 / counterOfferFactor);
 	}
 
 	private void updateNegotiationRound(long id) {
@@ -370,9 +409,12 @@ public abstract class AbstractContractCustomer {
 
 	// CONFIRM
 	public void handleMessage(ContractConfirm message) {
-		activeContracts.put(message.getContractId(), service.getContractRepo()
-				.findContractById(message.getContractId()));
-		negotiationRounds.put(message.getBroker().getId(), 0);
+		if (isValidMessage(message)) {
+			activeContracts.put(message.getContractId(), service
+					.getContractRepo()
+					.findContractById(message.getContractId()));
+			negotiationRounds.put(message.getBroker().getId(), 0);
+		}
 	}
 
 	// END
@@ -383,25 +425,35 @@ public abstract class AbstractContractCustomer {
 	}
 
 	public void handleMessage(ContractAccept message) {
-		log.info("Contract ACCEPT arrived at Customer. Sending Confirm.");
-		ContractConfirm cf = new ContractConfirm(message.getBroker(), message);
-		service.getBrokerProxyService().sendMessage(message.getBroker(), cf);
-		negotiationRounds.put(message.getBroker().getId(), 0);
+		if (isValidMessage(message)) {
+			log.info("Contract ACCEPT arrived at Customer. Sending Confirm.");
+			if (message.isEveryIssueAccepted()) {
+				ContractConfirm cf = new ContractConfirm(message.getBroker(),
+						message);
+				service.getBrokerProxyService().sendMessage(
+						message.getBroker(), cf);
+				negotiationRounds.put(message.getBroker().getId(), 0);
+			} else {
+				processOffer(message, false);// CAN ACCEPT FALSE!!!
+			}
+		}
 	}
 
 	/** DECOMMIT is only allowed if this is a producer customer */
 	public void handleMessage(ContractDecommit message) {
-		log.info("Contract DECOMMIT arrived at Customer.");
+		if (isValidMessage(message)) {
+			log.info("Contract DECOMMIT arrived at Customer.");
 
-		if (this.getCustomerInfo(PowerType.PRODUCTION) != null) {
-			activeContracts.remove(message.getContractId());
-			ContractConfirm cf = new ContractConfirm(message.getBroker(),
-					message);
-			service.getBrokerProxyService()
-					.sendMessage(message.getBroker(), cf);
-			negotiationRounds.put(message.getBroker().getId(), 0);
-		} else {
-			log.error("Trying to DECOMMIT from a consumer customer. This is not possible");
+			if (this.getCustomerInfo(PowerType.PRODUCTION) != null) {
+				activeContracts.remove(message.getContractId());
+				ContractConfirm cf = new ContractConfirm(message.getBroker(),
+						message);
+				service.getBrokerProxyService().sendMessage(
+						message.getBroker(), cf);
+				negotiationRounds.put(message.getBroker().getId(), 0);
+			} else {
+				log.error("Trying to DECOMMIT from a consumer customer. This is not possible");
+			}
 		}
 	}
 
@@ -560,8 +612,14 @@ public abstract class AbstractContractCustomer {
 				.getStartTime())) {
 			for (CustomerInfo ci : service.getCustomerRepo().findByName(
 					getName())) {
-				ContractAnnounce cann = new ContractAnnounce(ci.getId());// has to be CustomerInfo ID
+				ContractAnnounce cann = new ContractAnnounce(ci.getId());// has
+																			// to
+																			// be
+																			// CustomerInfo
+																			// ID
 				service.getBrokerProxyService().broadcastMessage(cann);
+				service.getTimeSeriesRepo().addHistoricLoadTimeSeries(
+						ci.getId(), historicLoad);
 			}
 		}
 	}
