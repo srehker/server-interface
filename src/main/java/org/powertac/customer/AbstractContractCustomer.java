@@ -13,6 +13,7 @@ import org.powertac.common.CustomerInfo;
 import org.powertac.common.IdGenerator;
 import org.powertac.common.RandomSeed;
 import org.powertac.common.Contract.State;
+import org.powertac.common.enumerations.ContractIssue;
 import org.powertac.common.enumerations.PowerType;
 import org.powertac.common.exceptions.PowerTacException;
 import org.powertac.common.interfaces.CustomerServiceAccessor;
@@ -62,6 +63,9 @@ public abstract class AbstractContractCustomer {
 	protected double reservationEnergyPrice = 0.002;
 	protected double reservationPeakLoadPrice = 65;
 	protected double reservationEarlyExitPrice = 5000;
+	protected double initialEnergyPrice = 0.006;
+	protected double initialPeakLoadPrice = 75;
+	protected double initialEarlyExitPrice = 5000;
 	protected long durationPreference = 1000 * 60 * 60 * 24 * 30;
 	protected long maxDurationDeviation = 1000 * 60 * 60 * 24 * 7;
 
@@ -125,9 +129,9 @@ public abstract class AbstractContractCustomer {
 
 				// Energy Price
 				ContractOffer co = new ContractOffer(message);
-				if (!message.isAcceptedEnergyPrice()) {
+				if (!message.isAcceptedEnergyPrice()&& message.isDiscussedIssue(ContractIssue.ENERGY_PRICE)) {
 					coEnergyPrice = generateOfferPriceBuyer(
-							message.getEnergyPrice(), reservationEnergyPrice,
+							initialEnergyPrice, reservationEnergyPrice,
 							getRound(message));
 					co.setEnergyPrice(coEnergyPrice);
 					utility = computeEnergyPriceUtilityBuyer(message,
@@ -148,10 +152,10 @@ public abstract class AbstractContractCustomer {
 				}
 
 				// Peak Load Price
-				if (!message.isAcceptedPeakLoadPrice()) {
+				if (!message.isAcceptedPeakLoadPrice()&& message.isDiscussedIssue(ContractIssue.PEAK_LOAD_PRICE)) {
 					co = new ContractOffer(message);
 					coPeakLoadPrice = generateOfferPriceBuyer(
-							message.getPeakLoadPrice(),
+							initialPeakLoadPrice,
 							reservationPeakLoadPrice, getRound(message));
 					co.setPeakLoadPrice(coPeakLoadPrice);
 					utility = computePeakLoadPriceUtilityBuyer(message,
@@ -172,7 +176,7 @@ public abstract class AbstractContractCustomer {
 				}
 
 				// Duration
-				if (!message.isAcceptedDuration()) {
+				if (!message.isAcceptedDuration()&& message.isDiscussedIssue(ContractIssue.DURATION)) {
 					co = new ContractOffer(message);
 					coDuration = durationPreference; // TODO generation
 					co.setDuration(coDuration);
@@ -192,10 +196,10 @@ public abstract class AbstractContractCustomer {
 				}
 
 				// Early Withdraw
-				if (!message.isAcceptedEarlyWithdrawPayment()) {
+				if (!message.isAcceptedEarlyWithdrawPayment()&& message.isDiscussedIssue(ContractIssue.EARLY_WITHDRAW_PRICE)) {
 					co = new ContractOffer(message);
 					coEarlyWithdrawPrice = generateOfferPriceBuyer(
-							message.getEarlyWithdrawPayment(),
+							initialEarlyExitPrice,
 							reservationEarlyExitPrice, getRound(message));
 					co.setEarlyWithdrawPayment(coEarlyWithdrawPrice);
 					utility = computeEarlyWithdrawUtility(message);
@@ -215,24 +219,28 @@ public abstract class AbstractContractCustomer {
 				}
 
 				// NOTHING WAS ACCEPTED THIS ROUND -> COUNTER OFFER
-				if (!message.isAcceptedEnergyPrice()) {
+				if (!message.isAcceptedEnergyPrice()&& message.isDiscussedIssue(ContractIssue.ENERGY_PRICE)) {
 					co = new ContractOffer(message);
 					co.setEnergyPrice(coEnergyPrice);
+					co.setDiscussedIssue(ContractIssue.ENERGY_PRICE);
 					service.getBrokerProxyService().sendMessage(
 							message.getBroker(), co);
-				} else if (!message.isAcceptedPeakLoadPrice()) {
+				} else if (!message.isAcceptedPeakLoadPrice()&& message.isDiscussedIssue(ContractIssue.PEAK_LOAD_PRICE)) {
 					co = new ContractOffer(message);
 					co.setPeakLoadPrice(coPeakLoadPrice);
+					co.setDiscussedIssue(ContractIssue.PEAK_LOAD_PRICE);
 					service.getBrokerProxyService().sendMessage(
 							message.getBroker(), co);
-				} else if (!message.isAcceptedDuration()) {
+				} else if (!message.isAcceptedDuration()&& message.isDiscussedIssue(ContractIssue.DURATION)) {
 					co = new ContractOffer(message);
 					co.setDuration(coDuration);
+					co.setDiscussedIssue(ContractIssue.DURATION);
 					service.getBrokerProxyService().sendMessage(
 							message.getBroker(), co);
-				} else if (!message.isAcceptedEarlyWithdrawPayment()) {
+				} else if (!message.isAcceptedEarlyWithdrawPayment()&& message.isDiscussedIssue(ContractIssue.EARLY_WITHDRAW_PRICE)) {
 					co = new ContractOffer(message);
 					co.setEarlyWithdrawPayment(coEarlyWithdrawPrice);
+					co.setDiscussedIssue(ContractIssue.EARLY_WITHDRAW_PRICE);
 					service.getBrokerProxyService().sendMessage(
 							message.getBroker(), co);
 				} else {
@@ -245,9 +253,9 @@ public abstract class AbstractContractCustomer {
 			else if (message.getPowerType() == PowerType.PRODUCTION) {
 				// Energy Price
 				ContractOffer co = new ContractOffer(message);
-				if (!message.isAcceptedEnergyPrice()) {
+				if (!message.isAcceptedEnergyPrice()&& message.isDiscussedIssue(ContractIssue.ENERGY_PRICE)) {
 					coEnergyPrice = generateOfferPriceSeller(
-							message.getEnergyPrice(), reservationEnergyPrice,
+							initialEnergyPrice, reservationEnergyPrice,
 							getRound(message));
 					co.setEnergyPrice(coEnergyPrice);
 					utility = computeEnergyPriceUtilitySeller(message,
@@ -268,10 +276,10 @@ public abstract class AbstractContractCustomer {
 				}
 
 				// Peak Load Price
-				if (!message.isAcceptedPeakLoadPrice()) {
+				if (!message.isAcceptedPeakLoadPrice()&& message.isDiscussedIssue(ContractIssue.PEAK_LOAD_PRICE)) {
 					co = new ContractOffer(message);
 					coPeakLoadPrice = generateOfferPriceSeller(
-							message.getPeakLoadPrice(),
+							initialPeakLoadPrice,
 							reservationPeakLoadPrice, getRound(message));
 					co.setPeakLoadPrice(coPeakLoadPrice);
 					utility = computePeakLoadPriceUtilitySeller(message,
@@ -292,7 +300,7 @@ public abstract class AbstractContractCustomer {
 				}
 
 				// Duration
-				if (!message.isAcceptedDuration()) {
+				if (!message.isAcceptedDuration()&& message.isDiscussedIssue(ContractIssue.DURATION)) {
 					co = new ContractOffer(message);
 					coDuration = durationPreference; // TODO generation
 					co.setDuration(coDuration);
@@ -312,10 +320,10 @@ public abstract class AbstractContractCustomer {
 				}
 
 				// Early Withdraw
-				if (!message.isAcceptedEarlyWithdrawPayment()) {
+				if (!message.isAcceptedEarlyWithdrawPayment()&& message.isDiscussedIssue(ContractIssue.EARLY_WITHDRAW_PRICE)) {
 					co = new ContractOffer(message);
 					coEarlyWithdrawPrice = generateOfferPriceSeller(
-							message.getEarlyWithdrawPayment(),
+							initialEarlyExitPrice,
 							reservationEarlyExitPrice, getRound(message));
 					co.setEarlyWithdrawPayment(coEarlyWithdrawPrice);
 					utility = computeEarlyWithdrawUtility(message);
@@ -335,24 +343,28 @@ public abstract class AbstractContractCustomer {
 				}
 
 				// NOTHING WAS ACCEPTED THIS ROUND -> COUNTER OFFER
-				if (!message.isAcceptedEnergyPrice()) {
+				if (!message.isAcceptedEnergyPrice()&& message.isDiscussedIssue(ContractIssue.ENERGY_PRICE)) {
 					co = new ContractOffer(message);
 					co.setEnergyPrice(coEnergyPrice);
+					co.setDiscussedIssue(ContractIssue.ENERGY_PRICE);
 					service.getBrokerProxyService().sendMessage(
 							message.getBroker(), co);
-				} else if (!message.isAcceptedPeakLoadPrice()) {
+				} else if (!message.isAcceptedPeakLoadPrice()&& message.isDiscussedIssue(ContractIssue.PEAK_LOAD_PRICE)) {
 					co = new ContractOffer(message);
 					co.setPeakLoadPrice(coPeakLoadPrice);
+					co.setDiscussedIssue(ContractIssue.PEAK_LOAD_PRICE);
 					service.getBrokerProxyService().sendMessage(
 							message.getBroker(), co);
-				} else if (!message.isAcceptedDuration()) {
+				} else if (!message.isAcceptedDuration()&& message.isDiscussedIssue(ContractIssue.DURATION)) {
 					co = new ContractOffer(message);
 					co.setDuration(coDuration);
+					co.setDiscussedIssue(ContractIssue.DURATION);
 					service.getBrokerProxyService().sendMessage(
 							message.getBroker(), co);
-				} else if (!message.isAcceptedEarlyWithdrawPayment()) {
+				} else if (!message.isAcceptedEarlyWithdrawPayment()&& message.isDiscussedIssue(ContractIssue.EARLY_WITHDRAW_PRICE)) {
 					co = new ContractOffer(message);
 					co.setEarlyWithdrawPayment(coEarlyWithdrawPrice);
+					co.setDiscussedIssue(ContractIssue.EARLY_WITHDRAW_PRICE);
 					service.getBrokerProxyService().sendMessage(
 							message.getBroker(), co);
 				} else {
@@ -434,7 +446,8 @@ public abstract class AbstractContractCustomer {
 						message.getBroker(), cf);
 				negotiationRounds.put(message.getBroker().getId(), 0);
 			} else {
-				processOffer(message, false);// CAN ACCEPT FALSE!!!
+				service.getBrokerProxyService().sendMessage(
+						message.getBroker(), new ContractOffer(message));
 			}
 		}
 	}
