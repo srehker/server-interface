@@ -53,7 +53,7 @@ public abstract class AbstractContractCustomer {
 
 	/** max number of rounds for negotiation */
 	protected static final int DEADLINE = 10;
-	protected static final double discountingFactor = 0.1;
+	protected static final double timeDiscountingFactor = 0.1;
 	/**
 	 * 1 = linear, <1 boulware and conceder for >1
 	 */
@@ -129,10 +129,10 @@ public abstract class AbstractContractCustomer {
 
 				// Energy Price
 				ContractOffer co = new ContractOffer(message);
-				if (!message.isAcceptedEnergyPrice()&& message.isDiscussedIssue(ContractIssue.ENERGY_PRICE)) {
-					coEnergyPrice = generateOfferPriceBuyer(
-							initialEnergyPrice, reservationEnergyPrice,
-							getRound(message));
+				if (!message.isAcceptedEnergyPrice()
+						&& message.isDiscussedIssue(ContractIssue.ENERGY_PRICE)) {
+					coEnergyPrice = generateOfferPriceBuyer(initialEnergyPrice,
+							reservationEnergyPrice, getRound(message));
 					co.setEnergyPrice(coEnergyPrice);
 					utility = computeEnergyPriceUtilityBuyer(message,
 							message.getDuration());
@@ -152,11 +152,13 @@ public abstract class AbstractContractCustomer {
 				}
 
 				// Peak Load Price
-				if (!message.isAcceptedPeakLoadPrice()&& message.isDiscussedIssue(ContractIssue.PEAK_LOAD_PRICE)) {
+				if (!message.isAcceptedPeakLoadPrice()
+						&& message
+								.isDiscussedIssue(ContractIssue.PEAK_LOAD_PRICE)) {
 					co = new ContractOffer(message);
 					coPeakLoadPrice = generateOfferPriceBuyer(
-							initialPeakLoadPrice,
-							reservationPeakLoadPrice, getRound(message));
+							initialPeakLoadPrice, reservationPeakLoadPrice,
+							getRound(message));
 					co.setPeakLoadPrice(coPeakLoadPrice);
 					utility = computePeakLoadPriceUtilityBuyer(message,
 							message.getDuration());
@@ -176,9 +178,10 @@ public abstract class AbstractContractCustomer {
 				}
 
 				// Duration
-				if (!message.isAcceptedDuration()&& message.isDiscussedIssue(ContractIssue.DURATION)) {
+				if (!message.isAcceptedDuration()
+						&& message.isDiscussedIssue(ContractIssue.DURATION)) {
 					co = new ContractOffer(message);
-					coDuration = durationPreference; // TODO generation
+					coDuration = generateDuration(message.getDuration(), durationPreference, maxDurationDeviation, getRound(message));
 					co.setDuration(coDuration);
 					utility = computeUtility(message, message.getDuration());
 					counterOfferUtility = computeUtility(co, co.getDuration());
@@ -196,11 +199,13 @@ public abstract class AbstractContractCustomer {
 				}
 
 				// Early Withdraw
-				if (!message.isAcceptedEarlyWithdrawPayment()&& message.isDiscussedIssue(ContractIssue.EARLY_WITHDRAW_PRICE)) {
+				if (!message.isAcceptedEarlyWithdrawPayment()
+						&& message
+								.isDiscussedIssue(ContractIssue.EARLY_WITHDRAW_PRICE)) {
 					co = new ContractOffer(message);
 					coEarlyWithdrawPrice = generateOfferPriceBuyer(
-							initialEarlyExitPrice,
-							reservationEarlyExitPrice, getRound(message));
+							initialEarlyExitPrice, reservationEarlyExitPrice,
+							getRound(message));
 					co.setEarlyWithdrawPayment(coEarlyWithdrawPrice);
 					utility = computeEarlyWithdrawUtility(message);
 					counterOfferUtility = computeEarlyWithdrawUtility(co);
@@ -219,25 +224,31 @@ public abstract class AbstractContractCustomer {
 				}
 
 				// NOTHING WAS ACCEPTED THIS ROUND -> COUNTER OFFER
-				if (!message.isAcceptedEnergyPrice()&& message.isDiscussedIssue(ContractIssue.ENERGY_PRICE)) {
+				if (!message.isAcceptedEnergyPrice()
+						&& message.isDiscussedIssue(ContractIssue.ENERGY_PRICE)) {
 					co = new ContractOffer(message);
 					co.setEnergyPrice(coEnergyPrice);
 					co.setDiscussedIssue(ContractIssue.ENERGY_PRICE);
 					service.getBrokerProxyService().sendMessage(
 							message.getBroker(), co);
-				} else if (!message.isAcceptedPeakLoadPrice()&& message.isDiscussedIssue(ContractIssue.PEAK_LOAD_PRICE)) {
+				} else if (!message.isAcceptedPeakLoadPrice()
+						&& message
+								.isDiscussedIssue(ContractIssue.PEAK_LOAD_PRICE)) {
 					co = new ContractOffer(message);
 					co.setPeakLoadPrice(coPeakLoadPrice);
 					co.setDiscussedIssue(ContractIssue.PEAK_LOAD_PRICE);
 					service.getBrokerProxyService().sendMessage(
 							message.getBroker(), co);
-				} else if (!message.isAcceptedDuration()&& message.isDiscussedIssue(ContractIssue.DURATION)) {
+				} else if (!message.isAcceptedDuration()
+						&& message.isDiscussedIssue(ContractIssue.DURATION)) {
 					co = new ContractOffer(message);
 					co.setDuration(coDuration);
 					co.setDiscussedIssue(ContractIssue.DURATION);
 					service.getBrokerProxyService().sendMessage(
 							message.getBroker(), co);
-				} else if (!message.isAcceptedEarlyWithdrawPayment()&& message.isDiscussedIssue(ContractIssue.EARLY_WITHDRAW_PRICE)) {
+				} else if (!message.isAcceptedEarlyWithdrawPayment()
+						&& message
+								.isDiscussedIssue(ContractIssue.EARLY_WITHDRAW_PRICE)) {
 					co = new ContractOffer(message);
 					co.setEarlyWithdrawPayment(coEarlyWithdrawPrice);
 					co.setDiscussedIssue(ContractIssue.EARLY_WITHDRAW_PRICE);
@@ -253,7 +264,8 @@ public abstract class AbstractContractCustomer {
 			else if (message.getPowerType() == PowerType.PRODUCTION) {
 				// Energy Price
 				ContractOffer co = new ContractOffer(message);
-				if (!message.isAcceptedEnergyPrice()&& message.isDiscussedIssue(ContractIssue.ENERGY_PRICE)) {
+				if (!message.isAcceptedEnergyPrice()
+						&& message.isDiscussedIssue(ContractIssue.ENERGY_PRICE)) {
 					coEnergyPrice = generateOfferPriceSeller(
 							initialEnergyPrice, reservationEnergyPrice,
 							getRound(message));
@@ -276,11 +288,13 @@ public abstract class AbstractContractCustomer {
 				}
 
 				// Peak Load Price
-				if (!message.isAcceptedPeakLoadPrice()&& message.isDiscussedIssue(ContractIssue.PEAK_LOAD_PRICE)) {
+				if (!message.isAcceptedPeakLoadPrice()
+						&& message
+								.isDiscussedIssue(ContractIssue.PEAK_LOAD_PRICE)) {
 					co = new ContractOffer(message);
 					coPeakLoadPrice = generateOfferPriceSeller(
-							initialPeakLoadPrice,
-							reservationPeakLoadPrice, getRound(message));
+							initialPeakLoadPrice, reservationPeakLoadPrice,
+							getRound(message));
 					co.setPeakLoadPrice(coPeakLoadPrice);
 					utility = computePeakLoadPriceUtilitySeller(message,
 							message.getDuration());
@@ -300,9 +314,10 @@ public abstract class AbstractContractCustomer {
 				}
 
 				// Duration
-				if (!message.isAcceptedDuration()&& message.isDiscussedIssue(ContractIssue.DURATION)) {
+				if (!message.isAcceptedDuration()
+						&& message.isDiscussedIssue(ContractIssue.DURATION)) {
 					co = new ContractOffer(message);
-					coDuration = durationPreference; // TODO generation
+					coDuration = generateDuration(message.getDuration(), durationPreference, maxDurationDeviation, getRound(message));
 					co.setDuration(coDuration);
 					utility = computeUtility(message, message.getDuration());
 					counterOfferUtility = computeUtility(co, co.getDuration());
@@ -320,11 +335,13 @@ public abstract class AbstractContractCustomer {
 				}
 
 				// Early Withdraw
-				if (!message.isAcceptedEarlyWithdrawPayment()&& message.isDiscussedIssue(ContractIssue.EARLY_WITHDRAW_PRICE)) {
+				if (!message.isAcceptedEarlyWithdrawPayment()
+						&& message
+								.isDiscussedIssue(ContractIssue.EARLY_WITHDRAW_PRICE)) {
 					co = new ContractOffer(message);
 					coEarlyWithdrawPrice = generateOfferPriceSeller(
-							initialEarlyExitPrice,
-							reservationEarlyExitPrice, getRound(message));
+							initialEarlyExitPrice, reservationEarlyExitPrice,
+							getRound(message));
 					co.setEarlyWithdrawPayment(coEarlyWithdrawPrice);
 					utility = computeEarlyWithdrawUtility(message);
 					counterOfferUtility = computeEarlyWithdrawUtility(co);
@@ -343,25 +360,31 @@ public abstract class AbstractContractCustomer {
 				}
 
 				// NOTHING WAS ACCEPTED THIS ROUND -> COUNTER OFFER
-				if (!message.isAcceptedEnergyPrice()&& message.isDiscussedIssue(ContractIssue.ENERGY_PRICE)) {
+				if (!message.isAcceptedEnergyPrice()
+						&& message.isDiscussedIssue(ContractIssue.ENERGY_PRICE)) {
 					co = new ContractOffer(message);
 					co.setEnergyPrice(coEnergyPrice);
 					co.setDiscussedIssue(ContractIssue.ENERGY_PRICE);
 					service.getBrokerProxyService().sendMessage(
 							message.getBroker(), co);
-				} else if (!message.isAcceptedPeakLoadPrice()&& message.isDiscussedIssue(ContractIssue.PEAK_LOAD_PRICE)) {
+				} else if (!message.isAcceptedPeakLoadPrice()
+						&& message
+								.isDiscussedIssue(ContractIssue.PEAK_LOAD_PRICE)) {
 					co = new ContractOffer(message);
 					co.setPeakLoadPrice(coPeakLoadPrice);
 					co.setDiscussedIssue(ContractIssue.PEAK_LOAD_PRICE);
 					service.getBrokerProxyService().sendMessage(
 							message.getBroker(), co);
-				} else if (!message.isAcceptedDuration()&& message.isDiscussedIssue(ContractIssue.DURATION)) {
+				} else if (!message.isAcceptedDuration()
+						&& message.isDiscussedIssue(ContractIssue.DURATION)) {
 					co = new ContractOffer(message);
 					co.setDuration(coDuration);
 					co.setDiscussedIssue(ContractIssue.DURATION);
 					service.getBrokerProxyService().sendMessage(
 							message.getBroker(), co);
-				} else if (!message.isAcceptedEarlyWithdrawPayment()&& message.isDiscussedIssue(ContractIssue.EARLY_WITHDRAW_PRICE)) {
+				} else if (!message.isAcceptedEarlyWithdrawPayment()
+						&& message
+								.isDiscussedIssue(ContractIssue.EARLY_WITHDRAW_PRICE)) {
 					co = new ContractOffer(message);
 					co.setEarlyWithdrawPayment(coEarlyWithdrawPrice);
 					co.setDiscussedIssue(ContractIssue.EARLY_WITHDRAW_PRICE);
@@ -381,14 +404,23 @@ public abstract class AbstractContractCustomer {
 		return negotiationRounds.get(message.getBroker().getId());
 	}
 
-	@Deprecated
-	private ContractOffer generateCounterOffer(ContractOffer message) {
-		return new ContractOffer(message.getBroker(),
-				this.custId,// not custid
-				reservationEnergyPrice, reservationPeakLoadPrice,
-				durationPreference, reservationEarlyExitPrice,
-				message.getPowerType());
+	public long generateDuration(long offeredDuration, long preferredDuration,
+			long maxDurationDeviation, int round) {
+		// contract offer is too long period
+		if (offeredDuration > preferredDuration) {
+			return offeredDuration
+					- (Math.round(negotiationDecisionFunction(0, round, DEADLINE)
+							* maxDurationDeviation)/24*60*60*1000L) * 24*60*60*1000L; // round on full hours
 
+		}
+		// offer is too short period
+		else if (preferredDuration > offeredDuration) {
+			return offeredDuration
+					+ (Math.round(negotiationDecisionFunction(0, round, DEADLINE)
+							* maxDurationDeviation)/24*60*60*1000L) * 24*60*60*1000L; // round on full hours
+		} else {
+			return offeredDuration;
+		}
 	}
 
 	public double generateOfferPriceBuyer(double initialPrice,
@@ -498,7 +530,7 @@ public abstract class AbstractContractCustomer {
 		// energy
 		// cost
 		// TIME DISCOUNTING
-		utility = utility * Math.pow(discountingFactor, getRound(offer));
+		utility = utility * Math.pow(timeDiscountingFactor, getRound(offer));
 
 		return utility;
 	}
@@ -517,7 +549,7 @@ public abstract class AbstractContractCustomer {
 		// energy
 		// cost
 		// TIME DISCOUNTING
-		utility = utility * Math.pow(discountingFactor, getRound(offer));
+		utility = utility * Math.pow(timeDiscountingFactor, getRound(offer));
 
 		return utility;
 	}
@@ -539,7 +571,7 @@ public abstract class AbstractContractCustomer {
 																				// fee
 		}
 		// TIME DISCOUNTING
-		utility = utility * Math.pow(discountingFactor, getRound(offer));
+		utility = utility * Math.pow(timeDiscountingFactor, getRound(offer));
 
 		return utility;
 	}
@@ -566,7 +598,7 @@ public abstract class AbstractContractCustomer {
 																				// price
 		}
 		// TIME DISCOUNTING
-		utility = utility * Math.pow(discountingFactor, getRound(offer));
+		utility = utility * Math.pow(timeDiscountingFactor, getRound(offer));
 
 		return utility;
 	}
@@ -581,7 +613,7 @@ public abstract class AbstractContractCustomer {
 		}
 
 		// TIME DISCOUNTING
-		utility = utility * Math.pow(discountingFactor, getRound(offer));
+		utility = utility * Math.pow(timeDiscountingFactor, getRound(offer));
 		return utility;
 	}
 
