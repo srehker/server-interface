@@ -57,7 +57,7 @@ public abstract class AbstractContractCustomer {
 	/**
 	 * 1 = linear, <1 boulware and conceder for >1
 	 */
-	protected static final double counterOfferFactor = 1;
+	protected double counterOfferFactor = 0.5;
 	protected HashMap<Long, Integer> negotiationRounds = new HashMap<Long, Integer>();
 
 	protected double reservationEnergyPrice = 0.002;
@@ -145,6 +145,7 @@ public abstract class AbstractContractCustomer {
 					if (canAccept && utility >= counterOfferUtility) {
 						ContractAccept ca = new ContractAccept(message);
 						ca.setAcceptedEnergyPrice(true);
+						resetNegotiationRound(message.getBroker().getId());
 						service.getBrokerProxyService().sendMessage(
 								message.getBroker(), ca);
 						return;
@@ -171,6 +172,7 @@ public abstract class AbstractContractCustomer {
 					if (canAccept && utility >= counterOfferUtility) {
 						ContractAccept ca = new ContractAccept(message);
 						ca.setAcceptedPeakLoadPrice(true);
+						resetNegotiationRound(message.getBroker().getId());
 						service.getBrokerProxyService().sendMessage(
 								message.getBroker(), ca);
 						return;
@@ -192,6 +194,7 @@ public abstract class AbstractContractCustomer {
 					if (canAccept && utility >= counterOfferUtility) {
 						ContractAccept ca = new ContractAccept(message);
 						ca.setAcceptedDuration(true);
+						resetNegotiationRound(message.getBroker().getId());
 						service.getBrokerProxyService().sendMessage(
 								message.getBroker(), ca);
 						return;
@@ -217,6 +220,7 @@ public abstract class AbstractContractCustomer {
 					if (canAccept && utility >= counterOfferUtility) {
 						ContractAccept ca = new ContractAccept(message);
 						ca.setAcceptedEarlyWithdrawPayment(true);
+						resetNegotiationRound(message.getBroker().getId());
 						service.getBrokerProxyService().sendMessage(
 								message.getBroker(), ca);
 						return;
@@ -281,6 +285,7 @@ public abstract class AbstractContractCustomer {
 					if (canAccept && utility >= counterOfferUtility) {
 						ContractAccept ca = new ContractAccept(message);
 						ca.setAcceptedEnergyPrice(true);
+						resetNegotiationRound(message.getBroker().getId());
 						service.getBrokerProxyService().sendMessage(
 								message.getBroker(), ca);
 						return;
@@ -307,6 +312,7 @@ public abstract class AbstractContractCustomer {
 					if (canAccept && utility >= counterOfferUtility) {
 						ContractAccept ca = new ContractAccept(message);
 						ca.setAcceptedPeakLoadPrice(true);
+						resetNegotiationRound(message.getBroker().getId());
 						service.getBrokerProxyService().sendMessage(
 								message.getBroker(), ca);
 						return;
@@ -328,6 +334,7 @@ public abstract class AbstractContractCustomer {
 					if (canAccept && utility >= counterOfferUtility) {
 						ContractAccept ca = new ContractAccept(message);
 						ca.setAcceptedDuration(true);
+						resetNegotiationRound(message.getBroker().getId());
 						service.getBrokerProxyService().sendMessage(
 								message.getBroker(), ca);
 						return;
@@ -353,6 +360,7 @@ public abstract class AbstractContractCustomer {
 					if (canAccept && utility >= counterOfferUtility) {
 						ContractAccept ca = new ContractAccept(message);
 						ca.setAcceptedEarlyWithdrawPayment(true);
+						resetNegotiationRound(message.getBroker().getId());
 						service.getBrokerProxyService().sendMessage(
 								message.getBroker(), ca);
 						return;
@@ -450,6 +458,10 @@ public abstract class AbstractContractCustomer {
 		}
 
 	}
+	
+	private void resetNegotiationRound(long id) {		
+			negotiationRounds.put(id, 0);
+	}
 
 	// CONFIRM
 	public void handleMessage(ContractConfirm message) {
@@ -470,6 +482,7 @@ public abstract class AbstractContractCustomer {
 
 	public void handleMessage(ContractAccept message) {
 		if (isValidMessage(message)) {
+			resetNegotiationRound(message.getBroker().getId());
 			log.info("Contract ACCEPT arrived at Customer. Sending Confirm.");
 			if (message.isEveryIssueAccepted()) {
 				ContractConfirm cf = new ContractConfirm(message.getBroker(),
@@ -478,8 +491,22 @@ public abstract class AbstractContractCustomer {
 						message.getBroker(), cf);
 				negotiationRounds.put(message.getBroker().getId(), 0);
 			} else {
+				ContractOffer newOffer = new ContractOffer(message);
+				// when you start a negotation on a new issue, do it with your own initial prices
+				if(!newOffer.isAcceptedDuration()){
+					newOffer.setDuration(durationPreference);
+				}
+				if(!newOffer.isAcceptedEarlyWithdrawPayment()){
+					newOffer.setEarlyWithdrawPayment(initialEarlyExitPrice);
+				}
+				if(!newOffer.isAcceptedEnergyPrice()){
+					newOffer.setEnergyPrice(initialEnergyPrice);
+				}
+				if(!newOffer.isAcceptedPeakLoadPrice()){
+					newOffer.setPeakLoadPrice(initialPeakLoadPrice);
+				}
 				service.getBrokerProxyService().sendMessage(
-						message.getBroker(), new ContractOffer(message));
+						message.getBroker(), newOffer);
 			}
 		}
 	}
