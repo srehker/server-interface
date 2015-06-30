@@ -53,11 +53,11 @@ public abstract class AbstractContractCustomer {
 
 	/** max number of rounds for negotiation */
 	protected static final int DEADLINE = 10;
-	protected static final double timeDiscountingFactor = 0.1;
+	protected static final double timeDiscountingFactor = 1;
 	/**
 	 * 1 = linear, <1 boulware and conceder for >1
 	 */
-	protected double counterOfferFactor = 0.5;
+	protected double counterOfferFactor = 1;
 	protected HashMap<Long, Integer> negotiationRounds = new HashMap<Long, Integer>();
 
 	protected double reservationEnergyPrice = 0.002;
@@ -66,8 +66,8 @@ public abstract class AbstractContractCustomer {
 	protected double initialEnergyPrice = 0.006;
 	protected double initialPeakLoadPrice = 75;
 	protected double initialEarlyExitPrice = 5000;
-	protected long durationPreference = 1000 * 60 * 60 * 24 * 30;
-	protected long maxDurationDeviation = 1000 * 60 * 60 * 24 * 7;
+	protected long durationPreference = 1000 * 60 * 60 * 24 * 365L;
+	protected long maxDurationDeviation = 1000 * 60 * 60 * 24 * 180L;
 
 	/**
 	 * constructor, requires explicit setting of name
@@ -191,7 +191,7 @@ public abstract class AbstractContractCustomer {
 							+ co + " Round =" + getRound(message) + " Utility="
 							+ utility + "CO-Utility=" + counterOfferUtility);
 					// cant find a better option --> ACCEPT
-					if (canAccept && utility >= counterOfferUtility) {
+					if (canAccept && message.getDuration()<= durationPreference + maxDurationDeviation && message.getDuration()>= durationPreference-maxDurationDeviation &&  utility >= counterOfferUtility) {
 						ContractAccept ca = new ContractAccept(message);
 						ca.setAcceptedDuration(true);
 						resetNegotiationRound(message.getBroker().getId());
@@ -331,7 +331,7 @@ public abstract class AbstractContractCustomer {
 							+ co + " Round =" + getRound(message) + " Utility="
 							+ utility + "CO-Utility=" + counterOfferUtility);
 					// cant find a better option --> ACCEPT
-					if (canAccept && utility >= counterOfferUtility) {
+					if (canAccept && message.getDuration()<= durationPreference + maxDurationDeviation && message.getDuration()>= durationPreference-maxDurationDeviation &&  utility >0 && utility >= counterOfferUtility) {
 						ContractAccept ca = new ContractAccept(message);
 						ca.setAcceptedDuration(true);
 						resetNegotiationRound(message.getBroker().getId());
@@ -416,16 +416,16 @@ public abstract class AbstractContractCustomer {
 			long maxDurationDeviation, int round) {
 		// contract offer is too long period
 		if (offeredDuration > preferredDuration) {
-			return offeredDuration
-					- (Math.round(negotiationDecisionFunction(0, round, DEADLINE)
-							* maxDurationDeviation)/24*60*60*1000L) * 24*60*60*1000L; // round on full hours
+			return preferredDuration
+					+ (Math.round(negotiationDecisionFunction(0, round, DEADLINE)
+							* maxDurationDeviation)/(24*60*60*1000L)) * 24*60*60*1000L; // round on full hours
 
 		}
 		// offer is too short period
 		else if (preferredDuration > offeredDuration) {
-			return offeredDuration
-					+ (Math.round(negotiationDecisionFunction(0, round, DEADLINE)
-							* maxDurationDeviation)/24*60*60*1000L) * 24*60*60*1000L; // round on full hours
+			return preferredDuration
+					- (Math.round(negotiationDecisionFunction(0, round, DEADLINE)
+							* maxDurationDeviation)/(24*60*60*1000L)) * 24*60*60*1000L; // round on full hours
 		} else {
 			return offeredDuration;
 		}
@@ -530,14 +530,15 @@ public abstract class AbstractContractCustomer {
 	}
 
 	public double computeUtility(ContractOffer offer, long duration) {
+		long durationdays = duration/ (24*60*60*1000L);
 		if (offer.getPowerType() == PowerType.CONSUMPTION) {
-			return computeEnergyPriceUtilityBuyer(offer, duration)
+			return (computeEnergyPriceUtilityBuyer(offer, duration)
 					+ computePeakLoadPriceUtilityBuyer(offer, duration)
-					+ computeEarlyWithdrawUtility(offer);
+					+ computeEarlyWithdrawUtility(offer))/durationdays;
 		} else if (offer.getPowerType() == PowerType.PRODUCTION) {
-			return computeEnergyPriceUtilitySeller(offer, duration)
+			return (computeEnergyPriceUtilitySeller(offer, duration)
 					+ computePeakLoadPriceUtilitySeller(offer, duration)
-					+ computeEarlyWithdrawUtility(offer);
+					+ computeEarlyWithdrawUtility(offer))/durationdays;
 		}
 
 		return -1;
