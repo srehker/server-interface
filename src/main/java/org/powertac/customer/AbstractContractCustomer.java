@@ -52,12 +52,12 @@ public abstract class AbstractContractCustomer {
 	protected LoadForecast forecast;
 
 	/** max number of rounds for negotiation */
-	protected static final int DEADLINE = 10;
-	protected static final double timeDiscountingFactor = 1;
+	protected int DEADLINE = 10;
+	protected double timeDiscountingFactor = 1;
 	/**
 	 * 1 = linear, <1 boulware and conceder for >1
 	 */
-	protected double counterOfferFactor = 1;
+	protected double counterOfferFactor = 2;
 	protected HashMap<Long, Integer> negotiationRounds = new HashMap<Long, Integer>();
 
 	protected double reservationEnergyPrice = 0.002;
@@ -65,9 +65,10 @@ public abstract class AbstractContractCustomer {
 	protected double reservationEarlyExitPrice = 5000;
 	protected double initialEnergyPrice = 0.006;
 	protected double initialPeakLoadPrice = 75;
-	protected double initialEarlyExitPrice = 5000;
+	protected double initialEarlyExitPrice = 2000;
 	protected long durationPreference = 1000 * 60 * 60 * 24 * 365L;
 	protected long maxDurationDeviation = 1000 * 60 * 60 * 24 * 180L;
+	protected double probabiltyContractIntersection = 0.5;
 
 	/**
 	 * constructor, requires explicit setting of name
@@ -638,6 +639,8 @@ public abstract class AbstractContractCustomer {
 
 		if (activeContract(starttime)) {
 			utility += offer.getEarlyWithdrawPayment();
+		}else{
+			utility += offer.getEarlyWithdrawPayment() * probabiltyContractIntersection;
 		}
 
 		// TIME DISCOUNTING
@@ -685,7 +688,8 @@ public abstract class AbstractContractCustomer {
 				.getStartTime())) {
 			for (CustomerInfo ci : service.getCustomerRepo().findByName(
 					getName())) {
-				ContractAnnounce cann = new ContractAnnounce(ci.getId());// has
+				ContractAnnounce cann = new ContractAnnounce(ci.getId(), service.getTimeslotRepo().currentTimeslot()
+						.getStartTime().getMillis());// has
 																			// to
 																			// be
 																			// CustomerInfo
